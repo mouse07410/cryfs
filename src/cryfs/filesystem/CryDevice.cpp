@@ -1,4 +1,4 @@
-#include <blockstore/implementations/caching/CachingBlockStore.h>
+#include <blockstore/implementations/caching/CachingBlockStore2.h>
 #include <cpp-utils/crypto/symmetric/ciphers.h>
 #include "parallelaccessfsblobstore/DirBlobRef.h"
 #include "CryDevice.h"
@@ -10,13 +10,15 @@
 #include <fspp/fuse/FuseErrnoException.h>
 #include <blobstore/implementations/onblocks/BlobStoreOnBlocks.h>
 #include <blobstore/implementations/onblocks/BlobOnBlocks.h>
-#include <blockstore/implementations/encrypted/EncryptedBlockStore.h>
-#include <blockstore/implementations/versioncounting/VersionCountingBlock.h>
+#include <blockstore/implementations/low2highlevel/LowToHighLevelBlockStore.h>
+#include <blockstore/implementations/encrypted/EncryptedBlockStore2.h>
+#include <blockstore/implementations/versioncounting/VersionCountingBlockStore2.h>
 #include "parallelaccessfsblobstore/ParallelAccessFsBlobStore.h"
 #include "cachingfsblobstore/CachingFsBlobStore.h"
 #include "../config/CryCipher.h"
 #include <cpp-utils/system/homedir.h>
 #include <gitversion/VersionCompare.h>
+#include <blockstore/interface/BlockStore2.h>
 #include "cryfs/localstate/MyClientId.h"
 #include "cryfs/localstate/LocalStateDir.h"
 
@@ -27,14 +29,15 @@ using fspp::fuse::CHECK_RETVAL;
 using fspp::fuse::FuseErrnoException;
 
 using blockstore::BlockStore;
+using blockstore::BlockStore2;
 using blockstore::Key;
-using blockstore::encrypted::EncryptedBlockStore;
+using blockstore::encrypted::EncryptedBlockStore2;
 using blobstore::BlobStore;
+using blockstore::lowtohighlevel::LowToHighLevelBlockStore;
 using blobstore::onblocks::BlobStoreOnBlocks;
 using blobstore::onblocks::BlobOnBlocks;
-using blockstore::caching::CachingBlockStore;
-using blockstore::versioncounting::VersionCountingBlockStore;
-using blockstore::versioncounting::VersionCountingBlock;
+using blockstore::caching::CachingBlockStore2;
+using blockstore::versioncounting::VersionCountingBlockStore2;
 using gitversion::VersionCompare;
 using cpputils::unique_ref;
 using cpputils::make_unique_ref;
@@ -54,13 +57,13 @@ namespace bf = boost::filesystem;
 
 namespace cryfs {
 
-CryDevice::CryDevice(CryConfigFile configFile, unique_ref<BlockStore> blockStore, uint32_t myClientId)
+CryDevice::CryDevice(CryConfigFile configFile, unique_ref<BlockStore2> blockStore, uint32_t myClientId)
 : _fsBlobStore(CreateFsBlobStore(std::move(blockStore), &configFile, myClientId)),
   _rootKey(GetOrCreateRootKey(&configFile)),
   _onFsAction() {
 }
 
-unique_ref<parallelaccessfsblobstore::ParallelAccessFsBlobStore> CryDevice::CreateFsBlobStore(unique_ref<BlockStore> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
+unique_ref<parallelaccessfsblobstore::ParallelAccessFsBlobStore> CryDevice::CreateFsBlobStore(unique_ref<BlockStore2> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
   auto blobStore = CreateBlobStore(std::move(blockStore), configFile, myClientId);
 
 #ifndef CRYFS_NO_COMPATIBILITY
@@ -86,32 +89,34 @@ unique_ref<fsblobstore::FsBlobStore> CryDevice::MigrateOrCreateFsBlobStore(uniqu
 }
 #endif
 
-unique_ref<blobstore::BlobStore> CryDevice::CreateBlobStore(unique_ref<BlockStore> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
+unique_ref<blobstore::BlobStore> CryDevice::CreateBlobStore(unique_ref<BlockStore2> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
   auto versionCountingEncryptedBlockStore = CreateVersionCountingEncryptedBlockStore(std::move(blockStore), configFile, myClientId);
   // Create versionCountingEncryptedBlockStore not in the same line as BlobStoreOnBlocks, because it can modify BlocksizeBytes
   // in the configFile and therefore has to be run before the second parameter to the BlobStoreOnBlocks parameter is evaluated.
   return make_unique_ref<BlobStoreOnBlocks>(
-     make_unique_ref<CachingBlockStore>(
-       std::move(versionCountingEncryptedBlockStore)
+     make_unique_ref<LowToHighLevelBlockStore>(
+         make_unique_ref<CachingBlockStore2>(
+             std::move(versionCountingEncryptedBlockStore)
+         )
      ),
      configFile->config()->BlocksizeBytes());
 }
 
-unique_ref<BlockStore> CryDevice::CreateVersionCountingEncryptedBlockStore(unique_ref<BlockStore> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
+unique_ref<BlockStore2> CryDevice::CreateVersionCountingEncryptedBlockStore(unique_ref<BlockStore2> blockStore, CryConfigFile *configFile, uint32_t myClientId) {
   auto encryptedBlockStore = CreateEncryptedBlockStore(*configFile->config(), std::move(blockStore));
   auto statePath = LocalStateDir::forFilesystemId(configFile->config()->FilesystemId());
   auto integrityFilePath = statePath / "integritydata";
 
 #ifndef CRYFS_NO_COMPATIBILITY
   if (!configFile->config()->HasVersionNumbers()) {
-    VersionCountingBlockStore::migrateFromBlockstoreWithoutVersionNumbers(encryptedBlockStore.get(), integrityFilePath, myClientId);
-    configFile->config()->SetBlocksizeBytes(configFile->config()->BlocksizeBytes() + VersionCountingBlock::HEADER_LENGTH);
+    VersionCountingBlockStore2::migrateFromBlockstoreWithoutVersionNumbers(encryptedBlockStore.get(), integrityFilePath, myClientId);
+    configFile->config()->SetBlocksizeBytes(configFile->config()->BlocksizeBytes() + VersionCountingBlockStore2::HEADER_LENGTH);
     configFile->config()->SetHasVersionNumbers(true);
     configFile->save();
   }
 #endif
 
-  return make_unique_ref<VersionCountingBlockStore>(std::move(encryptedBlockStore), integrityFilePath, myClientId, false);
+  return make_unique_ref<VersionCountingBlockStore2>(std::move(encryptedBlockStore), integrityFilePath, myClientId, false);
 }
 
 Key CryDevice::CreateRootBlobAndReturnKey() {
@@ -250,6 +255,7 @@ void CryDevice::statfs(const bf::path &path, struct statvfs *fsstat) {
   fsstat->f_ffree = numFreeBlocks;
   fsstat->f_namemax = 255; // We theoretically support unlimited file name length, but this is default for many Linux file systems, so probably also makes sense for CryFS.
   //f_frsize, f_favail, f_fsid and f_flag are ignored in fuse, see http://fuse.sourcearchive.com/documentation/2.7.0/structfuse__operations_4e765e29122e7b6b533dc99849a52655.html#4e765e29122e7b6b533dc99849a52655
+  fsstat->f_frsize = fsstat->f_bsize; // even though this is supposed to be ignored, osxfuse needs it.
 }
 
 unique_ref<FileBlobRef> CryDevice::CreateFileBlob(const blockstore::Key &parent) {
@@ -294,7 +300,7 @@ Key CryDevice::GetOrCreateRootKey(CryConfigFile *configFile) {
   return Key::FromString(root_key);
 }
 
-cpputils::unique_ref<blockstore::BlockStore> CryDevice::CreateEncryptedBlockStore(const CryConfig &config, unique_ref<BlockStore> baseBlockStore) {
+cpputils::unique_ref<blockstore::BlockStore2> CryDevice::CreateEncryptedBlockStore(const CryConfig &config, unique_ref<BlockStore2> baseBlockStore) {
   //TODO Test that CryFS is using the specified cipher
   return CryCiphers::find(config.Cipher()).createEncryptedBlockstore(std::move(baseBlockStore), config.EncryptionKey());
 }

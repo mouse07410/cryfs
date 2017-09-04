@@ -158,10 +158,11 @@ void DirBlob::statChildWithSizeAlreadySet(const Key &key, struct ::stat *result)
   result->st_blksize = _fsBlobStore->virtualBlocksizeBytes();
 }
 
-void DirBlob::updateAccessTimestampForChild(const Key &key) {
+void DirBlob::updateAccessTimestampForChild(const Key &key, TimestampUpdateBehavior timestampUpdateBehavior) {
   std::unique_lock<std::mutex> lock(_mutex);
-  _entries.updateAccessTimestampForChild(key);
-  _changed = true;
+  if (_entries.updateAccessTimestampForChild(key, timestampUpdateBehavior)) {
+    _changed = true;
+  }
 }
 
 void DirBlob::updateModificationTimestampForChild(const Key &key) {
