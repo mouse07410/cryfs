@@ -1,12 +1,26 @@
 language: cpp
-sudo: required
-dist: trusty
-compiler:
-- gcc
-- clang
+
 os:
 - linux
 - osx
+
+sudo: required
+dist: trusty
+
+osx_image: xcode8.3
+
+compiler:
+- gcc
+- clang
+
+matrix:
+  include:
+    - rvm: ruby-head
+      before_install:
+        - rvm get stable --auto-dotfiles
+        - rvm install 2.3.3
+        - rvm use 2.3
+
 addons:
   apt:
     sources:
