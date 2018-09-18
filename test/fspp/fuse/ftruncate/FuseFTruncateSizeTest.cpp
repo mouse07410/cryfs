@@ -1,15 +1,18 @@
 #include "testutils/FuseFTruncateTest.h"
 
-using ::testing::_;
-using ::testing::StrEq;
 using ::testing::Eq;
 using ::testing::Return;
 using ::testing::WithParamInterface;
 using ::testing::Values;
 
-class FuseFTruncateSizeTest: public FuseFTruncateTest, public WithParamInterface<off_t> {
+class FuseFTruncateSizeTest: public FuseFTruncateTest, public WithParamInterface<fspp::num_bytes_t> {
 };
-INSTANTIATE_TEST_CASE_P(FuseFTruncateSizeTest, FuseFTruncateSizeTest, Values(0, 1, 10, 1024, 1024*1024*1024));
+INSTANTIATE_TEST_CASE_P(FuseFTruncateSizeTest, FuseFTruncateSizeTest, Values(
+    fspp::num_bytes_t(0),
+    fspp::num_bytes_t(1),
+    fspp::num_bytes_t(10),
+    fspp::num_bytes_t(1024),
+    fspp::num_bytes_t(1024*1024*1024)));
 
 
 TEST_P(FuseFTruncateSizeTest, FTruncateFile) {
@@ -20,5 +23,5 @@ TEST_P(FuseFTruncateSizeTest, FTruncateFile) {
   //Needed to make ::ftruncate system call return successfully
   ReturnIsFileOnFstat(0);
 
-  FTruncateFile(FILENAME, GetParam());
+  FTruncateFile(FILENAME, fspp::num_bytes_t(GetParam()));
 }

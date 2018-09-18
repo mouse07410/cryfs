@@ -1,9 +1,8 @@
 #include "testutils/FuseFTruncateTest.h"
 
-#include "fspp/fuse/FuseErrnoException.h"
+#include "fspp/fs_interface/FuseErrnoException.h"
 
 using ::testing::_;
-using ::testing::StrEq;
 using ::testing::Throw;
 using ::testing::WithParamInterface;
 using ::testing::Values;
@@ -22,6 +21,6 @@ TEST_P(FuseFTruncateErrorTest, ReturnedErrorIsCorrect) {
   //Needed to make ::ftruncate system call return successfully
   ReturnIsFileOnFstat(0);
 
-  int error = FTruncateFileReturnError(FILENAME, 0);
+  int error = FTruncateFileReturnError(FILENAME, fspp::num_bytes_t(0));
   EXPECT_EQ(GetParam(), error);
 }

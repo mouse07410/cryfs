@@ -13,41 +13,45 @@ public:
         SCryptParameters result = SCryptParameters::deserialize(scrypt.kdfParameters());
         return result;
     }
+
+    template<size_t SIZE>
+    bool keyEquals(const EncryptionKey<SIZE>& lhs, const EncryptionKey<SIZE>& rhs) {
+        return 0 == std::memcmp(lhs.data(), rhs.data(), SIZE);
+    }
 };
 
 TEST_F(SCryptTest, GeneratedKeyIsReproductible_448) {
     auto derivedKey = scryptForNewKey->deriveKey<56>("mypassword");
     auto rederivedKey = scryptForExistingKey->deriveKey<56>("mypassword");
-    EXPECT_EQ(derivedKey, rederivedKey);
+    EXPECT_TRUE(keyEquals(derivedKey, rederivedKey));
 }
 
 TEST_F(SCryptTest, GeneratedKeyIsReproductible_256) {
     auto derivedKey = scryptForNewKey->deriveKey<32>("mypassword");
     auto rederivedKey = scryptForExistingKey->deriveKey<32>("mypassword");
-    EXPECT_EQ(derivedKey, rederivedKey);
+    EXPECT_TRUE(keyEquals(derivedKey, rederivedKey));
 }
 
 TEST_F(SCryptTest, GeneratedKeyIsReproductible_128) {
     auto derivedKey = scryptForNewKey->deriveKey<16>("mypassword");
     auto rederivedKey = scryptForExistingKey->deriveKey<16>("mypassword");
-    EXPECT_EQ(derivedKey, rederivedKey);
+    EXPECT_TRUE(keyEquals(derivedKey, rederivedKey));
 }
 
 TEST_F(SCryptTest, GeneratedKeyIsReproductible_DefaultSettings) {
     auto derivedKey = scryptForNewKey->deriveKey<16>("mypassword");
     auto rederivedKey = scryptForExistingKey->deriveKey<16>("mypassword");
-    EXPECT_EQ(derivedKey, rederivedKey);
+    EXPECT_TRUE(keyEquals(derivedKey, rederivedKey));
 }
 
 TEST_F(SCryptTest, DifferentPasswordResultsInDifferentKey) {
     auto derivedKey = scryptForNewKey->deriveKey<16>("mypassword");
     auto rederivedKey = scryptForExistingKey->deriveKey<16>("mypassword2");
-    EXPECT_NE(derivedKey, rederivedKey);
+    EXPECT_FALSE(keyEquals(derivedKey, rederivedKey));
 }
 
 TEST_F(SCryptTest, UsesCorrectSettings) {
     auto scrypt = SCrypt::forNewKey(SCrypt::TestSettings);
-    auto derivedKey = scrypt->deriveKey<16>("mypassword");
     SCryptParameters parameters = kdfParameters(*scrypt);
     EXPECT_EQ(SCrypt::TestSettings.SALT_LEN, parameters.salt().size());
     EXPECT_EQ(SCrypt::TestSettings.N, parameters.N());
@@ -57,7 +61,6 @@ TEST_F(SCryptTest, UsesCorrectSettings) {
 
 TEST_F(SCryptTest, UsesCorrectDefaultSettings) {
     auto scrypt = SCrypt::forNewKey(SCrypt::DefaultSettings);
-    auto derivedKey = scrypt->deriveKey<16>("mypassword");
     SCryptParameters parameters = kdfParameters(*scrypt);
     EXPECT_EQ(SCrypt::DefaultSettings.SALT_LEN, parameters.salt().size());
     EXPECT_EQ(SCrypt::DefaultSettings.N, parameters.N());
