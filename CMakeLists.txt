@@ -19,6 +19,29 @@ option(BUILD_TESTING "build test cases" OFF)
 option(CRYFS_UPDATE_CHECKS "let cryfs check for updates and security vulnerabilities" ON)
 option(DISABLE_OPENMP "allow building without OpenMP libraries. This will cause performance degradations." OFF)
 
+# The following provides MacOS location of OpenMP components for Apple
+# systems that are unable to locate libomp on their own.
+#
+# The following paths are for libomp installed by Macports (usually as a part
+# of Clang or GCC installation).
+# Brew and other package managers could place them in different locations,
+# in which case the value should be edited to point at the right place.
+#
+# Systems other than MacOS should just ignore it.
+#
+if (NOT DISABLE_OPENMP)
+   find_package(OpenMP)
+   if((NOT OPENMP_FOUND) AND APPLE)
+       # MacOS requires some help locating Macports or Brew-installed libomp
+       message("Setting flags for OpenMP on MacOS (needed for Crypto++)")
+       set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/opt/local/include/libomp")
+       set(OpenMP_C_FLAGS   "-Xpreprocessor -fopenmp -I/opt/local/include/libomp")
+       set(OpenMP_CXX_LIB_NAMES "omp")
+       set(OpenMP_C_LIB_NAMES "omp")
+       set(OpenMP_omp_LIBRARY "/opt/local/lib/libomp/libomp.dylib")
+   endif((NOT OPENMP_FOUND) AND APPLE)
+endif(NOT DISABLE_OPENMP)
+
 if (MSVC)
     option(DOKAN_PATH "Location of the Dokan library, e.g. C:\\Program Files\\Dokan\\DokanLibrary-1.1.0" "")
 endif()
