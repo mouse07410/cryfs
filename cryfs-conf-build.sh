@@ -11,12 +11,28 @@ rm -rf build
 mkdir -p build
 cd build
 
-# Normal build on MacOS
+# CMake flags needed for a normal build on MacOS
 CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off"
-# Self-explanatory - build on MacOS without OpenMP (useful when neither Macports nor Brew is there)
-#CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off -DDISABLE_OPENMP=ON"
-# Build on MacOS, enforcing Macports-installed Clang (currently not necessary, kept for historic reasons)
-#CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off -DCMAKE_C_COMPILER=clang-mp-6.0 -DCMAKE_CXX_COMPILER=clang++-mp-6.0"
+
+############################################################
+# The following section deals with various ways to configure
+# OpenMP on MacOS using Clang from Xcode or installed by
+# Macports. You need to uncomment only one of those lines.
+#
+# If instead of Macports you use Brew, change the absolute paths
+# for libomp to what they should be for Brew.
+#
+# Self-explanatory - build on MacOS without OpenMP (useful when neither
+# Macports nor Brew is there, so no libomp is available)
+#CMAKEFLAGS="${CMAKEFLAGS} -DDISABLE_OPENMP=ON"
+#
+# Build on MacOS, enforcing Macports-installed Clang
+#CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_C_COMPILER=clang-mp-6.0 -DCMAKE_CXX_COMPILER=clang++-mp-6.0"
+#
+# Using AppleClang from Xcode with Macports-installed libomp
+CMAKEFLAGS="${CMAKEFLAGS} -DOpenMP_CXX_FLAGS='-Xpreprocessor -fopenmp -I/opt/local/include/libomp'" -DOpenMP_CXX_LIB_NAMES=omp -DOpenMP_omp_LIBRARY=/opt/local/lib/libomp.dylib"
+############################################################
+
 
 # Installation prefix compatible with where Macports installs stuff on MacOS
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_INSTALL_PREFIX=/opt/local"
