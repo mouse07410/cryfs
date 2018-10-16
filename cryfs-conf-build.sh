@@ -31,12 +31,12 @@ CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off "
 #CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_C_COMPILER=clang-mp-6.0 -DCMAKE_CXX_COMPILER=clang++-mp-6.0"
 #
 # Using AppleClang from Xcode with Macports-installed libomp (currently does not work)
-OMP_CMAKE_C_FLAGS="-DOpenMP_C_FLAGS=-I/opt/local/include/libomp"
-OMP_CMAKE_CXX_FLAGS="-DOpenMP_CXX_FLAGS=-I/opt/local/include/libomp"
-OMP_CMAKE_OMP="-Xclang -fopenmp"
-OMP_CMAKE_C_LIBNAMES="-DOpenMP_C_LIB_NAMES=omp"
-OMP_CMAKE_CXX_LIBNAMES="-DOpenMP_CXX_LIB_NAMES=omp"
-CMAKEFLAGS="${CMAKEFLAGS} ${OMP_CMAKE_C_FLAGS} ${OMP_CMAKE_CXX_FLAGS} ${OMP_CMAKE_C_LIBNAMES} ${OMP_CMAKE_CXX_LIBNAMES} -DOpenMP_omp_LIBRARY=/opt/local/lib/libomp/libomp.dylib"
+#OMP_CMAKE_C_FLAGS="-DOpenMP_C_FLAGS=-I/opt/local/include/libomp"
+#OMP_CMAKE_CXX_FLAGS="-DOpenMP_CXX_FLAGS=-I/opt/local/include/libomp"
+#OMP_CMAKE_OMP="-Xclang -fopenmp"
+#OMP_CMAKE_C_LIBNAMES="-DOpenMP_C_LIB_NAMES=omp"
+#OMP_CMAKE_CXX_LIBNAMES="-DOpenMP_CXX_LIB_NAMES=omp"
+#CMAKEFLAGS="${CMAKEFLAGS} ${OMP_CMAKE_C_FLAGS} ${OMP_CMAKE_CXX_FLAGS} ${OMP_CMAKE_C_LIBNAMES} ${OMP_CMAKE_CXX_LIBNAMES} -DOpenMP_omp_LIBRARY=/opt/local/lib/libomp/libomp.dylib"
 ############################################################
 
 
