@@ -14,6 +14,8 @@ set(SOURCES
     config/CryCipherTest.cpp
     config/CryConfigLoaderTest.cpp
     config/CryConfigConsoleTest.cpp
+    config/CryPasswordBasedKeyProviderTest.cpp
+    config/CryPresetPasswordBasedKeyProviderTest.cpp
     filesystem/CryFsTest.cpp
     filesystem/CryNodeTest.cpp
     filesystem/FileSystemTest.cpp
