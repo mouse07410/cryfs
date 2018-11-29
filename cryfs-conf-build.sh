@@ -14,6 +14,8 @@ cd build
 # CMake flags needed for a normal build on MacOS
 CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off "
 
+OSXFUSE_INCLUDE="-I/usr/local/include"
+
 ############################################################
 # The following section deals with various ways to configure
 # OpenMP on MacOS using Clang from Xcode or installed by
@@ -49,7 +51,8 @@ CMAKEFLAGS="${CMAKEFLAGS} -DBoost_USE_STATIC_LIBS=off -DCRYFS_UPDATE_CHECKS=off"
 # Provide verbose output - useful to debug build process
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"
 
-cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS="-I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS}"
+cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS="-I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS} ${OSXFUSE_INCLUDE}" -DFUSE_LIB_PATH=/usr/local/lib
+
 time make -j 4 V=1
 #make check
 cd ..
