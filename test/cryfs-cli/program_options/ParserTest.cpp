@@ -1,13 +1,13 @@
 #include "testutils/ProgramOptionsTestBase.h"
 #include <cryfs-cli/program_options/Parser.h>
-#include <cryfs/config/CryCipher.h>
+#include <cryfs/impl/config/CryCipher.h>
 #include <cpp-utils/pointer/unique_ref_boost_optional_gtest_workaround.h>
 #include <gitversion/gitversion.h>
-#include <cryfs/CryfsException.h>
+#include <cryfs/impl/CryfsException.h>
 #include <cpp-utils/testutils/CaptureStderrRAII.h>
 
 using namespace cryfs;
-using namespace cryfs::program_options;
+using namespace cryfs_cli::program_options;
 using std::vector;
 using std::string;
 using boost::none;

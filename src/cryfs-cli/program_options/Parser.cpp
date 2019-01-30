@@ -2,13 +2,13 @@
 #include "utils.h"
 #include <iostream>
 #include <boost/optional.hpp>
-#include <cryfs/config/CryConfigConsole.h>
-#include <cryfs/CryfsException.h>
+#include <cryfs/impl/config/CryConfigConsole.h>
+#include <cryfs/impl/CryfsException.h>
 #include <cryfs-cli/Environment.h>
 
 namespace po = boost::program_options;
 namespace bf = boost::filesystem;
-using namespace cryfs::program_options;
+using namespace cryfs_cli::program_options;
 using cryfs::CryConfigConsole;
 using cryfs::CryfsException;
 using cryfs::ErrorCode;
@@ -49,16 +49,13 @@ ProgramOptions Parser::parse(const vector<string> &supportedCiphers) const {
     if (!vm.count("mount-dir")) {
         _showHelpAndExit("Please specify a mount directory.", ErrorCode::InvalidArguments);
     }
-    bf::path baseDir = bf::absolute(vm["base-dir"].as<string>());
-    bf::path mountDir = bf::absolute(vm["mount-dir"].as<string>());
+    bf::path baseDir = vm["base-dir"].as<string>();
+    bf::path mountDir = vm["mount-dir"].as<string>();
     optional<bf::path> configfile = none;
     if (vm.count("config")) {
         configfile = bf::absolute(vm["config"].as<string>());
     }
     bool foreground = vm.count("foreground");
-    if (foreground) {
-        fuseOptions.push_back(const_cast<char*>("-f"));
-    }
     bool allowFilesystemUpgrade = vm.count("allow-filesystem-upgrade");
     bool allowReplacedFilesystem = vm.count("allow-replaced-filesystem");
     optional<double> unmountAfterIdleMinutes = 0.0;  // first setting to 0 and then to none is somehow needed to silence a GCC warning from -Wmaybe-uninitialized

@@ -16,6 +16,7 @@ set(SOURCES
     process/daemonize_include_test.cpp
     process/subprocess_include_test.cpp
     process/SubprocessTest.cpp
+	process/SignalCatcherTest.cpp
     tempfile/TempFileTest.cpp
     tempfile/TempFileIncludeTest.cpp
     tempfile/TempDirIncludeTest.cpp
@@ -28,6 +29,7 @@ set(SOURCES
     io/ConsoleTest_Print.cpp
     io/ConsoleTest_Ask.cpp
 	io/ConsoleTest_AskPassword.cpp
+	io/ProgressBarTest.cpp
     random/RandomIncludeTest.cpp
     lock/LockPoolIncludeTest.cpp
     lock/ConditionBarrierIncludeTest.cpp
@@ -49,11 +51,15 @@ set(SOURCES
     assert/assert_debug_test.cpp
     system/GetTotalMemoryTest.cpp
     system/TimeTest.cpp
+	system/PathTest.cpp
 	system/FiletimeTest.cpp
     system/MemoryTest.cpp
     system/HomedirTest.cpp
 	system/EnvTest.cpp
+	thread/debugging_test.cpp
+	thread/LeftRightTest.cpp
     value_type/ValueTypeTest.cpp
+	either_test.cpp
 )
 
 add_executable(${PROJECT_NAME}_exit_status process/exit_status.cpp)

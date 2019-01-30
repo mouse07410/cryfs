@@ -10,26 +10,28 @@
 #include <fspp/impl/FilesystemImpl.h>
 #include <cpp-utils/process/subprocess.h>
 #include <cpp-utils/io/DontEchoStdinToStdoutRAII.h>
-#include <cryfs/filesystem/CryDevice.h>
-#include <cryfs/config/CryConfigLoader.h>
-#include <cryfs/config/CryPasswordBasedKeyProvider.h>
+#include <cryfs/impl/filesystem/CryDevice.h>
+#include <cryfs/impl/config/CryConfigLoader.h>
+#include <cryfs/impl/config/CryPasswordBasedKeyProvider.h>
 #include "program_options/Parser.h"
 #include <boost/filesystem.hpp>
 
-#include <cryfs/filesystem/CryDir.h>
+#include <cryfs/impl/filesystem/CryDir.h>
 #include <gitversion/gitversion.h>
 
 #include "VersionChecker.h"
 #include <gitversion/VersionCompare.h>
 #include <cpp-utils/io/NoninteractiveConsole.h>
-#include <cryfs/localstate/LocalStateDir.h>
-#include <cryfs/localstate/BasedirMetadata.h>
+#include <cryfs/impl/localstate/LocalStateDir.h>
+#include <cryfs/impl/localstate/BasedirMetadata.h>
 #include "Environment.h"
-#include <cryfs/CryfsException.h>
+#include <cryfs/impl/CryfsException.h>
+#include <cpp-utils/thread/debugging.h>
 
 //TODO Many functions accessing the ProgramOptions object. Factor out into class that stores it as a member.
 //TODO Factor out class handling askPassword
 
+using namespace cryfs_cli;
 using namespace cryfs;
 namespace bf = boost::filesystem;
 using namespace cpputils::logging;
@@ -51,8 +53,9 @@ using std::string;
 using std::endl;
 using std::shared_ptr;
 using std::make_shared;
+using std::unique_ptr;
+using std::make_unique;
 using std::function;
-using std::make_shared;
 using boost::optional;
 using boost::none;
 using boost::chrono::minutes;
@@ -65,10 +68,10 @@ using gitversion::VersionCompare;
 //TODO Replace ASSERTs with other error handling when it is not a programming error but an environment influence (e.g. a block is missing)
 //TODO Can we improve performance by setting compiler parameter -maes for scrypt?
 
-namespace cryfs {
+namespace cryfs_cli {
 
-    Cli::Cli(RandomGenerator &keyGenerator, const SCryptSettings& scryptSettings, shared_ptr<Console> console):
-            _keyGenerator(keyGenerator), _scryptSettings(scryptSettings), _console(), _noninteractive(false) {
+    Cli::Cli(RandomGenerator &keyGenerator, const SCryptSettings &scryptSettings, shared_ptr<Console> console):
+            _keyGenerator(keyGenerator), _scryptSettings(scryptSettings), _console(), _noninteractive(false), _idleUnmounter(none), _device(none) {
         _noninteractive = Environment::isNoninteractive();
         if (_noninteractive) {
             _console = make_shared<NoninteractiveConsole>(console);
@@ -202,7 +205,7 @@ namespace cryfs {
         if (config == none) {
           throw CryfsException("Could not load config file. Did you enter the correct password?", ErrorCode::WrongPassword);
         }
-        _checkConfigIntegrity(options.baseDir(), localStateDir, config->configFile, options.allowReplacedFilesystem());
+        _checkConfigIntegrity(options.baseDir(), localStateDir, *config->configFile, options.allowReplacedFilesystem());
         return std::move(*config);
     }
 
@@ -219,33 +222,60 @@ namespace cryfs {
                                cipher, blocksizeBytes, missingBlockIsIntegrityViolation).loadOrCreate(std::move(configFilePath), allowFilesystemUpgrade, allowReplacedFilesystem);
     }
 
-    void Cli::_runFilesystem(const ProgramOptions &options) {
+    void Cli::_runFilesystem(const ProgramOptions &options, std::function<void()> onMounted) {
         try {
-          LocalStateDir localStateDir(Environment::localStateDir());
-          auto blockStore = make_unique_ref<OnDiskBlockStore2>(options.baseDir());
-          auto config = _loadOrCreateConfig(options, localStateDir);
-          CryDevice device(std::move(config.configFile), std::move(blockStore), std::move(localStateDir), config.myClientId,
-                           options.allowIntegrityViolations(), config.configFile.config()->missingBlockIsIntegrityViolation());
-          _sanityCheckFilesystem(&device);
-          fspp::FilesystemImpl fsimpl(&device);
-          fspp::fuse::Fuse fuse(&fsimpl, "cryfs", "cryfs@" + options.baseDir().string());
+            LocalStateDir localStateDir(Environment::localStateDir());
+            auto blockStore = make_unique_ref<OnDiskBlockStore2>(options.baseDir());
+            auto config = _loadOrCreateConfig(options, localStateDir);
+            unique_ptr<fspp::fuse::Fuse> fuse = nullptr;
+            bool stoppedBecauseOfIntegrityViolation = false;
 
-          _initLogfile(options);
+            auto onIntegrityViolation = [&fuse, &stoppedBecauseOfIntegrityViolation] () {
+              if (fuse.get() != nullptr) {
+                LOG(ERR, "Integrity violation detected. Unmounting.");
+                stoppedBecauseOfIntegrityViolation = true;
+                fuse->stop();
+              } else {
+                // Usually on an integrity violation, the file system is unmounted.
+                // Here, the file system isn't initialized yet, i.e. we failed in the initial steps when
+                // setting up _device before running initFilesystem.
+                // We can't unmount a not-mounted file system, but we can make sure it doesn't get mounted.
+                throw CryfsException("Integrity violation detected. Unmounting.", ErrorCode::IntegrityViolation);
+              }
+            };
+            const bool missingBlockIsIntegrityViolation = config.configFile->config()->missingBlockIsIntegrityViolation();
+            _device = optional<unique_ref<CryDevice>>(make_unique_ref<CryDevice>(std::move(config.configFile), std::move(blockStore), std::move(localStateDir), config.myClientId,
+                                                                                 options.allowIntegrityViolations(), missingBlockIsIntegrityViolation, std::move(onIntegrityViolation)));
+            _sanityCheckFilesystem(_device->get());
 
-          //TODO Test auto unmounting after idle timeout
-          //TODO This can fail due to a race condition if the filesystem isn't started yet (e.g. passing --unmount-idle 0").
-          auto idleUnmounter = _createIdleCallback(options.unmountAfterIdleMinutes(), [&fuse] { fuse.stop(); });
-          if (idleUnmounter != none) {
-            device.onFsAction(std::bind(&CallAfterTimeout::resetTimer, idleUnmounter->get()));
-          }
+            auto initFilesystem = [&] (fspp::fuse::Fuse *fs){
+                ASSERT(_device != none, "File system not ready to be initialized. Was it already initialized before?");
 
-#ifdef __APPLE__
-          std::cout << "\nMounting filesystem. To unmount, call:\n$ umount " << options.mountDir() << "\n" << std::endl;
-#else
-          std::cout << "\nMounting filesystem. To unmount, call:\n$ fusermount -u " << options.mountDir() << "\n"
-                    << std::endl;
-#endif
-          fuse.run(options.mountDir(), options.fuseOptions());
+                //TODO Test auto unmounting after idle timeout
+                _idleUnmounter = _createIdleCallback(options.unmountAfterIdleMinutes(), [fs] {fs->stop();});
+                if (_idleUnmounter != none) {
+                    (*_device)->onFsAction(std::bind(&CallAfterTimeout::resetTimer, _idleUnmounter->get()));
+                }
+
+                return make_shared<fspp::FilesystemImpl>(std::move(*_device));
+            };
+
+            fuse = make_unique<fspp::fuse::Fuse>(initFilesystem, std::move(onMounted), "cryfs", "cryfs@" + options.baseDir().string());
+
+            _initLogfile(options);
+
+            std::cout << "\nMounting filesystem. To unmount, call:\n$ cryfs-unmount " << options.mountDir() << "\n"
+                      << std::endl;
+
+            if (options.foreground()) {
+                fuse->runInForeground(options.mountDir(), options.fuseOptions());
+            } else {
+                fuse->runInBackground(options.mountDir(), options.fuseOptions());
+            }
+
+            if (stoppedBecauseOfIntegrityViolation) {
+              throw CryfsException("Integrity violation detected. Unmounting.", ErrorCode::IntegrityViolation);
+            }
         } catch (const CryfsException &e) {
             throw; // CryfsException is only thrown if setup goes wrong. Throw it through so that we get the correct process exit code.
         } catch (const std::exception &e) {
@@ -273,7 +303,7 @@ namespace cryfs {
             return none;
         }
         uint64_t millis = std::llround(60000 * (*minutes));
-        return make_unique_ref<CallAfterTimeout>(milliseconds(millis), callback);
+        return make_unique_ref<CallAfterTimeout>(milliseconds(millis), callback, "idlecallback");
     }
 
     void Cli::_initLogfile(const ProgramOptions &options) {
@@ -289,10 +319,17 @@ namespace cryfs {
         }
     }
 
-    void Cli::_sanityChecks(const ProgramOptions &options) {
-        _checkDirAccessible(options.baseDir(), "base directory", ErrorCode::InaccessibleBaseDir);
-        _checkDirAccessible(options.mountDir(), "mount directory", ErrorCode::InaccessibleMountDir);
-        _checkMountdirDoesntContainBasedir(options);
+	void Cli::_sanityChecks(const ProgramOptions &options) {
+		_checkDirAccessible(bf::absolute(options.baseDir()), "base directory", ErrorCode::InaccessibleBaseDir);
+
+		if (!options.mountDirIsDriveLetter()) {
+			_checkDirAccessible(options.mountDir(), "mount directory", ErrorCode::InaccessibleMountDir);
+			_checkMountdirDoesntContainBasedir(options);
+		} else {
+			if (bf::exists(options.mountDir())) {
+				throw CryfsException("Drive " + options.mountDir().string() + " already exists.", ErrorCode::InaccessibleMountDir);
+			}
+		}
     }
 
     void Cli::_checkDirAccessible(const bf::path &dir, const std::string &name, ErrorCode errorCode) {
@@ -363,17 +400,18 @@ namespace cryfs {
         return false;
     }
 
-    int Cli::main(int argc, const char *argv[], unique_ref<HttpClient> httpClient) {
+    int Cli::main(int argc, const char *argv[], unique_ref<HttpClient> httpClient, std::function<void()> onMounted) {
         cpputils::showBacktraceOnCrash();
+        cpputils::set_thread_name("cryfs");
 
         try {
             _showVersion(std::move(httpClient));
             ProgramOptions options = program_options::Parser(argc, argv).parse(CryCiphers::supportedCipherNames());
             _sanityChecks(options);
-            _runFilesystem(options);
+            _runFilesystem(options, std::move(onMounted));
         } catch (const CryfsException &e) {
-            if (e.errorCode() != ErrorCode::Success) {
-              std::cerr << "Error: " << e.what() << std::endl;
+            if (e.what() != string()) {
+              std::cerr << "Error " << static_cast<int>(e.errorCode()) << ": " << e.what() << std::endl;
             }
             return exitCode(e.errorCode());
         } catch (const std::runtime_error &e) {

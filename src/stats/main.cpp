@@ -1,7 +1,7 @@
 #include <iostream>
 #include <boost/filesystem.hpp>
-#include <cryfs/config/CryConfigLoader.h>
-#include <cryfs/config/CryPasswordBasedKeyProvider.h>
+#include <cryfs/impl/config/CryConfigLoader.h>
+#include <cryfs/impl/config/CryPasswordBasedKeyProvider.h>
 #include <blockstore/implementations/ondisk/OnDiskBlockStore2.h>
 #include <blockstore/implementations/integrity/IntegrityBlockStore2.h>
 #include <blockstore/implementations/low2highlevel/LowToHighLevelBlockStore.h>
@@ -10,9 +10,9 @@
 #include <blobstore/implementations/onblocks/datanodestore/DataInnerNode.h>
 #include <blobstore/implementations/onblocks/datanodestore/DataLeafNode.h>
 #include <blobstore/implementations/onblocks/BlobStoreOnBlocks.h>
-#include <cryfs/filesystem/fsblobstore/FsBlobStore.h>
-#include <cryfs/filesystem/fsblobstore/DirBlob.h>
-#include <cryfs/filesystem/CryDevice.h>
+#include <cryfs/impl/filesystem/fsblobstore/FsBlobStore.h>
+#include <cryfs/impl/filesystem/fsblobstore/DirBlob.h>
+#include <cryfs/impl/filesystem/CryDevice.h>
 #include <cpp-utils/io/IOStreamConsole.h>
 #include <cpp-utils/system/homedir.h>
 
@@ -80,20 +80,23 @@ void _forEachBlockInBlob(DataNodeStore* nodeStore, const BlockId& rootId, std::f
 
 unique_ref<BlockStore> makeBlockStore(const path& basedir, const CryConfigLoader::ConfigLoadResult& config, LocalStateDir& localStateDir) {
     auto onDiskBlockStore = make_unique_ref<OnDiskBlockStore2>(basedir);
-    auto encryptedBlockStore = CryCiphers::find(config.configFile.config()->Cipher()).createEncryptedBlockstore(std::move(onDiskBlockStore), config.configFile.config()->EncryptionKey());
-    auto statePath = localStateDir.forFilesystemId(config.configFile.config()->FilesystemId());
+    auto encryptedBlockStore = CryCiphers::find(config.configFile->config()->Cipher()).createEncryptedBlockstore(std::move(onDiskBlockStore), config.configFile->config()->EncryptionKey());
+    auto statePath = localStateDir.forFilesystemId(config.configFile->config()->FilesystemId());
     auto integrityFilePath = statePath / "integritydata";
-    auto integrityBlockStore = make_unique_ref<IntegrityBlockStore2>(std::move(encryptedBlockStore), integrityFilePath, config.myClientId, false, true);
+    auto onIntegrityViolation = [] () {
+        std::cerr << "Warning: Integrity violation encountered" << std::endl;
+    };
+    auto integrityBlockStore = make_unique_ref<IntegrityBlockStore2>(std::move(encryptedBlockStore), integrityFilePath, config.myClientId, false, true, onIntegrityViolation);
     return make_unique_ref<LowToHighLevelBlockStore>(std::move(integrityBlockStore));
 }
 
 std::vector<BlockId> _getKnownBlobIds(const path& basedir, const CryConfigLoader::ConfigLoadResult& config, LocalStateDir& localStateDir) {
     auto blockStore = makeBlockStore(basedir, config, localStateDir);
-    auto fsBlobStore = make_unique_ref<FsBlobStore>(make_unique_ref<BlobStoreOnBlocks>(std::move(blockStore), config.configFile.config()->BlocksizeBytes()));
+    auto fsBlobStore = make_unique_ref<FsBlobStore>(make_unique_ref<BlobStoreOnBlocks>(std::move(blockStore), config.configFile->config()->BlocksizeBytes()));
 
     std::vector<BlockId> result;
     cout << "Listing all file system entities (i.e. blobs)..." << flush;
-    auto rootId = BlockId::FromString(config.configFile.config()->RootBlob());
+    auto rootId = BlockId::FromString(config.configFile->config()->RootBlob());
     _forEachBlob(fsBlobStore.get(), rootId, [&result] (const BlockId& blockId) {
         result.push_back(blockId);
     });
@@ -105,7 +108,7 @@ std::vector<BlockId> _getKnownBlockIds(const path& basedir, const CryConfigLoade
     auto knownBlobIds = _getKnownBlobIds(basedir, config, localStateDir);
 
     auto blockStore = makeBlockStore(basedir, config, localStateDir);
-    auto nodeStore = make_unique_ref<DataNodeStore>(std::move(blockStore), config.configFile.config()->BlocksizeBytes());
+    auto nodeStore = make_unique_ref<DataNodeStore>(std::move(blockStore), config.configFile->config()->BlocksizeBytes());
     std::vector<BlockId> result;
     const uint32_t numNodes = nodeStore->numNodes();
     result.reserve(numNodes);
@@ -151,13 +154,26 @@ int main(int argc, char* argv[]) {
         askPassword,
         make_unique_ref<SCrypt>(SCrypt::DefaultSettings)
     );
+
     auto config_path = basedir / "cryfs.config";
     LocalStateDir localStateDir(cpputils::system::HomeDirectory::getXDGDataDir() / "cryfs");
     CryConfigLoader config_loader(console, Random::OSRandom(), std::move(keyProvider), localStateDir, boost::none, boost::none, boost::none);
 
     auto config = config_loader.load(config_path, false, true);
     if (config == boost::none) {
-        std::cerr << "Error loading config file" << std::endl;
+        // TODO Show more info about error
+        throw std::runtime_error("Error loading config file.");
+    }
+    const auto& config_ = config->configFile.config();
+    std::cout << "Loading filesystem of version " << config_->Version() << std::endl;
+#ifndef CRYFS_NO_COMPATIBILITY
+    const bool is_correct_format = config_->Version() == CryConfig::FilesystemFormatVersion && !config_->HasParentPointers() && !config_->HasVersionNumbers();
+#else
+    const bool is_correct_format = config_->Version() == CryConfig::FilesystemFormatVersion;
+#endif
+    if (!is_correct_format) {
+        // TODO At this point, the cryfs.config file was already switched to 0.10 format. We should probably not do that.
+        std::cerr << "The filesystem is not in the 0.10 format. It needs to be migrated. The cryfs-stats tool unfortunately can't handle this, please mount and unmount the filesystem once." << std::endl;
         exit(1);
     }
 
@@ -174,7 +190,7 @@ int main(int argc, char* argv[]) {
     console->print("Calculate statistics\n");
 
     auto blockStore = makeBlockStore(basedir, *config, localStateDir);
-    auto nodeStore = make_unique_ref<DataNodeStore>(std::move(blockStore), config->configFile.config()->BlocksizeBytes());
+    auto nodeStore = make_unique_ref<DataNodeStore>(std::move(blockStore), config->configFile->config()->BlocksizeBytes());
 
     uint32_t numUnaccountedBlocks = unaccountedBlocks.size();
     uint32_t numLeaves = 0;

@@ -90,12 +90,12 @@ references:
     restore_cache:
       keys:
         # Find the most recent cache from any branch
-        - v2_upgrade_boost_cache_{{ checksum "/tmp/_build_env_vars" }}_{{ arch }}
+        - v4_upgrade_boost_cache_{{ checksum "/tmp/_build_env_vars" }}_{{ arch }}
   upgrade_boost_post: &upgrade_boost_post
     save_cache:
-      key: v2_upgrade_boost_cache_{{ checksum "/tmp/_build_env_vars" }}_{{ arch }}
+      key: v4_upgrade_boost_cache_{{ checksum "/tmp/_build_env_vars" }}_{{ arch }}
       paths:
-      - /tmp/boost_1_56_0
+      - /tmp/boost_1_58_0
   upgrade_boost: &upgrade_boost
     run:
       name: Upgrade Boost
@@ -104,10 +104,10 @@ references:
         export NUMCORES=`nproc`
         echo Using $NUMCORES cores
         # Download and prepare boost (only if not already present from cache)
-        if [ ! -d "/tmp/boost_1_56_0" ]; then
+        if [ ! -d "/tmp/boost_1_58_0" ]; then
           echo "Didn't find boost in cache. Downloading and building."
-          wget -O /tmp/boost.tar.bz2 https://sourceforge.net/projects/boost/files/boost/1.56.0/boost_1_56_0.tar.bz2/download
-          if [ $(sha512sum /tmp/boost.tar.bz2 | awk '{print $1;}') == "1ce9871c3a2519682538a5f1331938b948123432d99aea0ce026958cbebd25d84019a3a28c452724b9693df98a8d1264bb2d93d2fee508453f8b42836e67481e" ]; then
+          wget -O /tmp/boost.tar.bz2 https://sourceforge.net/projects/boost/files/boost/1.58.0/boost_1_58_0.tar.bz2/download
+          if [ $(sha512sum /tmp/boost.tar.bz2 | awk '{print $1;}') == "7480ec713b0aa13f0ec990603e87e3b5c8d53f4411329b10fae37fc963b90aad12dbd9290a33c3669ae801e9012a68683eadff057591e9ca2ebcd22b1a67b5d1" ]; then
             echo Correct sha512sum
           else
             echo Wrong sha512sum
@@ -117,14 +117,14 @@ references:
           echo Extracting...
           tar -xf /tmp/boost.tar.bz2 -C /tmp
           rm -rf boost.tar.bz2
-          cd /tmp/boost_1_56_0
+          cd /tmp/boost_1_58_0
           ./bootstrap.sh --with-toolset=${BUILD_TOOLSET} --with-libraries=filesystem,thread,chrono,program_options
           cd ..
         else
           echo Found boost in cache. Use cache and build.
         fi
         # Compile and install boost (if cached, this should be fast)
-        cd /tmp/boost_1_56_0
+        cd /tmp/boost_1_58_0
         sudo ./b2 toolset=${BUILD_TOOLSET} link=static cxxflags=-fPIC -d0 -j$NUMCORES install
   build_pre: &build_pre
     restore_cache:
@@ -173,14 +173,14 @@ references:
       command: |
         if "${RUN_TESTS}"; then
           cd cmake
-          ./test/gitversion/gitversion-test
-          if [ ! "$DISABLE_BROKEN_TSAN_TESTS" = true ] ; then ./test/cpp-utils/cpp-utils-test ; fi
-          if [ ! "$DISABLE_BROKEN_TSAN_TESTS" = true ] && [ ! "$DISABLE_BROKEN_ASAN_TESTS" = true ] ; then ./test/fspp/fspp-test ; fi
-          ./test/parallelaccessstore/parallelaccessstore-test
-          ./test/blockstore/blockstore-test
-          ./test/blobstore/blobstore-test
-          if [ ! "$DISABLE_BROKEN_TSAN_TESTS" = true ] ; then ./test/cryfs/cryfs-test ; fi
-          if [ ! "$DISABLE_BROKEN_TSAN_TESTS" = true ] ; then ./test/cryfs-cli/cryfs-cli-test ; fi
+          ./test/gitversion/gitversion-test ${GTEST_ARGS}
+          ./test/cpp-utils/cpp-utils-test ${GTEST_ARGS}
+          if [ ! "$DISABLE_BROKEN_ASAN_TESTS" = true ] ; then ./test/fspp/fspp-test ${GTEST_ARGS} ; fi
+          ./test/parallelaccessstore/parallelaccessstore-test ${GTEST_ARGS}
+          ./test/blockstore/blockstore-test ${GTEST_ARGS}
+          ./test/blobstore/blobstore-test ${GTEST_ARGS}
+          ./test/cryfs/cryfs-test ${GTEST_ARGS}
+          ./test/cryfs-cli/cryfs-cli-test ${GTEST_ARGS}
         fi
   job_definition: &job_definition
     <<: *container_config
@@ -212,6 +212,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-5"
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_5_release:
@@ -223,6 +224,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-5"
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_6_debug:
@@ -234,6 +236,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-6"
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_6_release:
@@ -245,6 +248,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-6"
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_7_debug:
@@ -256,6 +260,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-7"
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_7_release:
@@ -267,6 +272,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-7"
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_8_debug:
@@ -278,6 +284,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-8"
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   gcc_8_release:
@@ -289,6 +296,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-8"
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_4_debug:
@@ -300,6 +308,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-4.0
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_4_release:
@@ -311,6 +320,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-4.0
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_5_debug:
@@ -322,6 +332,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-5.0
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_5_release:
@@ -333,6 +344,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-5.0
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_6_debug:
@@ -344,6 +356,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-6.0
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_6_release:
@@ -355,6 +368,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-6.0
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_7_debug:
@@ -366,6 +380,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-7
       CXXFLAGS: ""
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_7_release:
@@ -377,6 +392,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-7
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_werror:
@@ -388,6 +404,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-7
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: "-DUSE_WERROR=on"
       RUN_TESTS: false
   gcc_werror:
@@ -399,6 +416,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-8"
       CXXFLAGS: ""
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: "-DUSE_WERROR=on"
       RUN_TESTS: false
   gcc_werror:
@@ -410,6 +428,7 @@ jobs:
       APT_COMPILER_PACKAGE: "g++-8"
       CXXFLAGS: "-Werror"
       BUILD_TYPE: "Release"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: false
   no_compatibility:
@@ -421,6 +440,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-7
       CXXFLAGS: "-DCRYFS_NO_COMPATIBILITY"
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   address_sanitizer:
@@ -434,6 +454,7 @@ jobs:
       BUILD_TYPE: "Debug"
       ASAN_OPTIONS: "detect_leaks=1 check_initialization_order=1 detect_stack_use_after_return=1 detect_invalid_pointer_pairs=1 atexit=1"
       DISABLE_BROKEN_ASAN_TESTS: true
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   ub_sanitizer:
@@ -445,6 +466,7 @@ jobs:
       APT_COMPILER_PACKAGE: clang-7
       CXXFLAGS: "-O2 -fno-sanitize-recover=undefined,nullability,implicit-conversion,unsigned-integer-overflow -fno-omit-frame-pointer -fno-common"
       BUILD_TYPE: "Debug"
+      GTEST_ARGS: ""
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   thread_sanitizer:
@@ -454,9 +476,10 @@ jobs:
       CXX: clang++-7
       BUILD_TOOLSET: clang
       APT_COMPILER_PACKAGE: clang-7
+      OMP_NUM_THREADS: "1"
       CXXFLAGS: "-O2 -fsanitize=thread -fno-omit-frame-pointer"
       BUILD_TYPE: "Debug"
-      DISABLE_BROKEN_TSAN_TESTS: true
+      GTEST_ARGS: "--gtest_filter=-LoggingTest.LoggingAlsoWorksAfterFork:AssertTest_DebugBuild.*:SignalCatcherTest.*_thenDies:CliTest_Setup.*:CliTest_IntegrityCheck.*:*/CliTest_WrongEnvironment.*:CliTest_Unmount.*"
       CMAKE_FLAGS: ""
       RUN_TESTS: true
   clang_tidy:
