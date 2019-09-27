@@ -5,14 +5,21 @@ os:
 - osx
 
 sudo: required
-os: osx
+
 compiler:
 # - gcc
 - clang
+
 env:
   - BUILD_TARGET=Debug
   - BUILD_TARGET=Release
   - BUILD_TARGET=RelWithDebInfo
+
+matrix:
+  allow_failures:
+    - os: osx
+      env: BUILD_MODE="Release"
+
 install:
 - .travisci/install.sh
 script:
