@@ -9,10 +9,17 @@ os: osx
 compiler:
 # - gcc
 - clang
+
 env:
   - BUILD_TARGET=Debug
   - BUILD_TARGET=Release
   - BUILD_TARGET=RelWithDebInfo
+
+matrix:
+  allow_failures:
+    - os: osx
+      env: BUILD_TARGET=Release
+
 install:
 - .travisci/install.sh
 script:
