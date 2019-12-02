@@ -6,6 +6,7 @@
 #include <cpp-utils/pointer/unique_ref.h>
 #include <sys/stat.h>
 #include "../fs_interface/Dir.h"
+#include "../fs_interface/Context.h"
 #if defined(_MSC_VER)
 #include <fuse/fuse.h>
 #else
@@ -18,6 +19,8 @@ namespace fuse {
 class Filesystem {
 public:
   virtual ~Filesystem() {}
+
+  virtual void setContext(Context&& context) = 0;
 
   //TODO Test uid/gid parameters of createAndOpenFile
   virtual int createAndOpenFile(const boost::filesystem::path &path, ::mode_t mode, ::uid_t uid, ::gid_t gid) = 0;
@@ -45,7 +48,7 @@ public:
   virtual void utimens(const boost::filesystem::path &path, timespec lastAccessTime, timespec lastModificationTime) = 0;
   virtual void statfs(struct ::statvfs *fsstat) = 0;
   //TODO We shouldn't use Dir::Entry here, that's in another layer
-  virtual cpputils::unique_ref<std::vector<Dir::Entry>> readDir(const boost::filesystem::path &path) = 0;
+  virtual std::vector<Dir::Entry> readDir(const boost::filesystem::path &path) = 0;
   //TODO Test createSymlink
   virtual void createSymlink(const boost::filesystem::path &to, const boost::filesystem::path &from, ::uid_t uid, ::gid_t gid) = 0;
   //TODO Test readSymlink

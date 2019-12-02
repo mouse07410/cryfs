@@ -1,6 +1,6 @@
 #include "FuseTest.h"
 
-using ::testing::StrEq;
+using ::testing::Eq;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::Throw;
@@ -19,7 +19,7 @@ using namespace fspp::fuse;
 MockFilesystem::MockFilesystem() {}
 MockFilesystem::~MockFilesystem() {}
 
-FuseTest::FuseTest(): fsimpl(make_shared<MockFilesystem>()) {
+FuseTest::FuseTest(): fsimpl(make_shared<MockFilesystem>()), _context(boost::none) {
   auto defaultAction = Throw(FuseErrnoException(EIO));
   ON_CALL(*fsimpl, openFile(_,_)).WillByDefault(defaultAction);
   ON_CALL(*fsimpl, closeFile(_)).WillByDefault(defaultAction);
@@ -48,18 +48,23 @@ FuseTest::FuseTest(): fsimpl(make_shared<MockFilesystem>()) {
   ON_CALL(*fsimpl, readSymlink(_,_,_)).WillByDefault(defaultAction);
 
   EXPECT_CALL(*fsimpl, access(_,_)).WillRepeatedly(Return());
+
+  ON_CALL(*fsimpl, setContext(_)).WillByDefault(Invoke([this] (fspp::Context context) {
+      _context = std::move(context);
+  }));
+
   ReturnIsDirOnLstat("/");
 }
 
-unique_ref<FuseTest::TempTestFS> FuseTest::TestFS() {
-  return make_unique_ref<TempTestFS>(fsimpl);
+unique_ref<FuseTest::TempTestFS> FuseTest::TestFS(const std::vector<std::string>& fuseOptions) {
+  return make_unique_ref<TempTestFS>(fsimpl, fuseOptions);
 }
 
-FuseTest::TempTestFS::TempTestFS(shared_ptr<MockFilesystem> fsimpl)
+FuseTest::TempTestFS::TempTestFS(shared_ptr<MockFilesystem> fsimpl, const std::vector<std::string>& fuseOptions)
  :_mountDir(),
   _fuse([fsimpl] (Fuse*) {return fsimpl;}, []{}, "fusetest", boost::none), _fuse_thread(&_fuse) {
 
-  _fuse_thread.start(_mountDir.path(), {});
+  _fuse_thread.start(_mountDir.path(), fuseOptions);
 }
 
 FuseTest::TempTestFS::~TempTestFS() {
@@ -70,8 +75,8 @@ const bf::path &FuseTest::TempTestFS::mountDir() const {
   return _mountDir.path();
 }
 
-Action<void(const char*, fspp::fuse::STAT*)> FuseTest::ReturnIsFileWithSize(fspp::num_bytes_t size) {
-  return Invoke([size](const char*, fspp::fuse::STAT* result) {
+Action<void(const boost::filesystem::path&, fspp::fuse::STAT*)> FuseTest::ReturnIsFileWithSize(fspp::num_bytes_t size) {
+  return Invoke([size](const boost::filesystem::path&, fspp::fuse::STAT* result) {
     result->st_mode = S_IFREG | S_IRUSR | S_IRGRP | S_IROTH;
     result->st_nlink = 1;
     result->st_size = size.value();
@@ -79,7 +84,7 @@ Action<void(const char*, fspp::fuse::STAT*)> FuseTest::ReturnIsFileWithSize(fspp
 }
 
 //TODO Combine ReturnIsFile and ReturnIsFileFstat. This should be possible in gmock by either (a) using ::testing::Undefined as parameter type or (b) using action macros
-Action<void(const char*, fspp::fuse::STAT*)> FuseTest::ReturnIsFile = ReturnIsFileWithSize(fspp::num_bytes_t(0));
+Action<void(const boost::filesystem::path&, fspp::fuse::STAT*)> FuseTest::ReturnIsFile = ReturnIsFileWithSize(fspp::num_bytes_t(0));
 
 Action<void(int, fspp::fuse::STAT*)> FuseTest::ReturnIsFileFstat =
   Invoke([](int, fspp::fuse::STAT* result) {
@@ -95,32 +100,32 @@ Action<void(int, fspp::fuse::STAT*)> FuseTest::ReturnIsFileFstatWithSize(fspp::n
   });
 }
 
-Action<void(const char*, fspp::fuse::STAT*)> FuseTest::ReturnIsDir =
-  Invoke([](const char*, fspp::fuse::STAT* result) {
+Action<void(const boost::filesystem::path&, fspp::fuse::STAT*)> FuseTest::ReturnIsDir =
+  Invoke([](const boost::filesystem::path&, fspp::fuse::STAT* result) {
     result->st_mode = S_IFDIR | S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH;
     result->st_nlink = 1;
   });
 
-Action<void(const char*, fspp::fuse::STAT*)> FuseTest::ReturnDoesntExist = Throw(fspp::fuse::FuseErrnoException(ENOENT));
+Action<void(const boost::filesystem::path&, fspp::fuse::STAT*)> FuseTest::ReturnDoesntExist = Throw(fspp::fuse::FuseErrnoException(ENOENT));
 
 void FuseTest::OnOpenReturnFileDescriptor(const char *filename, int descriptor) {
-  EXPECT_CALL(*fsimpl, openFile(StrEq(filename), _)).Times(1).WillOnce(Return(descriptor));
+  EXPECT_CALL(*fsimpl, openFile(Eq(filename), _)).Times(1).WillOnce(Return(descriptor));
 }
 
 void FuseTest::ReturnIsFileOnLstat(const bf::path &path) {
-  EXPECT_CALL(*fsimpl, lstat(::testing::StrEq(path.string().c_str()), ::testing::_)).WillRepeatedly(ReturnIsFile);
+  EXPECT_CALL(*fsimpl, lstat(Eq(path), ::testing::_)).WillRepeatedly(ReturnIsFile);
 }
 
 void FuseTest::ReturnIsFileOnLstatWithSize(const bf::path &path, const fspp::num_bytes_t size) {
-  EXPECT_CALL(*fsimpl, lstat(::testing::StrEq(path.string().c_str()), ::testing::_)).WillRepeatedly(ReturnIsFileWithSize(size));
+  EXPECT_CALL(*fsimpl, lstat(Eq(path), ::testing::_)).WillRepeatedly(ReturnIsFileWithSize(size));
 }
 
 void FuseTest::ReturnIsDirOnLstat(const bf::path &path) {
-  EXPECT_CALL(*fsimpl, lstat(::testing::StrEq(path.string().c_str()), ::testing::_)).WillRepeatedly(ReturnIsDir);
+  EXPECT_CALL(*fsimpl, lstat(Eq(path), ::testing::_)).WillRepeatedly(ReturnIsDir);
 }
 
 void FuseTest::ReturnDoesntExistOnLstat(const bf::path &path) {
-  EXPECT_CALL(*fsimpl, lstat(::testing::StrEq(path.string().c_str()), ::testing::_)).WillRepeatedly(ReturnDoesntExist);
+  EXPECT_CALL(*fsimpl, lstat(Eq(path), ::testing::_)).WillRepeatedly(ReturnDoesntExist);
 }
 
 void FuseTest::ReturnIsFileOnFstat(int descriptor) {

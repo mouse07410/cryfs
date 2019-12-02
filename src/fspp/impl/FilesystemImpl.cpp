@@ -91,6 +91,10 @@ FilesystemImpl::~FilesystemImpl() {
 #endif
 }
 
+void FilesystemImpl::setContext(Context&& context) {
+    _device->setContext(std::move(context));
+}
+
 unique_ref<File> FilesystemImpl::LoadFile(const bf::path &path) {
   PROFILE(_loadFileNanosec);
   auto file = _device->LoadFile(path);
@@ -290,7 +294,7 @@ void FilesystemImpl::rename(const bf::path &from, const bf::path &to) {
   }
 }
 
-unique_ref<vector<Dir::Entry>> FilesystemImpl::readDir(const bf::path &path) {
+vector<Dir::Entry> FilesystemImpl::readDir(const bf::path &path) {
   PROFILE(_readDirNanosec);
   auto dir = LoadDir(path);
   PROFILE(_readDirNanosec_withoutLoading);
