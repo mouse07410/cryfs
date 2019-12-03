@@ -11,6 +11,8 @@ rm -rf build
 mkdir -p build
 cd build
 
+conan install .. --build=missing 2>&1 | tee conan-out.txt
+
 # CMake flags needed for a normal build on MacOS
 CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off "
 
@@ -39,6 +41,7 @@ OSXFUSE_INCLUDE="-I/usr/local/include"
 #OMP_CMAKE_C_LIBNAMES="-DOpenMP_C_LIB_NAMES=omp"
 #OMP_CMAKE_CXX_LIBNAMES="-DOpenMP_CXX_LIB_NAMES=omp"
 #CMAKEFLAGS="${CMAKEFLAGS} ${OMP_CMAKE_C_FLAGS} ${OMP_CMAKE_CXX_FLAGS} ${OMP_CMAKE_C_LIBNAMES} ${OMP_CMAKE_CXX_LIBNAMES} -DOpenMP_omp_LIBRARY=/opt/local/lib/libomp/libomp.dylib"
+BOOST_INCLUDE="-I/opt/local/include /opt/local/lib/libboost_system-mt.dylib /opt/local/lib/libboost_thread-mt.dylib /opt/local/lib/libboost_stacktrace_basic-mt.dylib /opt/local/lib/libboost_filesystem-mt.dylib /opt/local/lib/libboost_serialization-mt.dylib /opt/local/lib/libboost_atomic-mt.dylib /opt/local/lib/libboost_chrono-mt.dylib /opt/local/lib/libboost_program_options-mt.dylib "
 ############################################################
 
 
@@ -51,9 +54,9 @@ CMAKEFLAGS="${CMAKEFLAGS} -DBoost_USE_STATIC_LIBS=off -DCRYFS_UPDATE_CHECKS=off"
 # Provide verbose output - useful to debug build process
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"
 
-cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS="-I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS} ${OSXFUSE_INCLUDE}" -DFUSE_LIB_PATH=/usr/local/lib
+cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS=" -I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${BOOST_INCLUDE} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS} ${OSXFUSE_INCLUDE}" -DFUSE_LIB_PATH=/usr/local/lib 2>&1 | tee cmake-out.txt
 
-time make -j 4 V=1
+time make -j 4 V=1 2>&1 | tee make-out.txt
 #make check
 cd ..
 exit 0
