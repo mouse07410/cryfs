@@ -48,8 +48,12 @@ BOOST_INCLUDE="-I/opt/local/include /opt/local/lib/libboost_system-mt.dylib /opt
 # Installation prefix compatible with where Macports installs stuff on MacOS
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_INSTALL_PREFIX=/opt/local"
 
+# When CryFS uses Macports-installed dynamic Boost libraries, ensure the build
+# does not try to link with static ones
+CMAKEFLAGS="${CMAKEFLAGS} -DBoost_USE_STATIC_LIBS=off"
+
 # Ensure cryfs does not try to reach over Internet for updates
-CMAKEFLAGS="${CMAKEFLAGS} -DBoost_USE_STATIC_LIBS=off -DCRYFS_UPDATE_CHECKS=off"
+CMAKEFLAGS="${CMAKEFLAGS} -DCRYFS_UPDATE_CHECKS=off"
 
 # Provide verbose output - useful to debug build process
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"
