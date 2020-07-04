@@ -1,3 +1,8 @@
+// NOMINMAX works around an MSVC issue, see https://github.com/microsoft/cppwinrt/issues/479
+#if defined(_MSC_VER)
+#define NOMINMAX
+#endif
+
 #include "Fuse.h"
 #include <memory>
 #include <cassert>
@@ -12,13 +17,13 @@
 #include <csignal>
 #include "InvalidFilesystem.h"
 #include <codecvt>
+#include <boost/algorithm/string/replace.hpp>
 
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/filter.hpp>
 
 #if defined(_MSC_VER)
-#include <codecvt>
 #include <dokan/dokan.h>
 #endif
 
@@ -420,7 +425,9 @@ vector<char *> Fuse::_build_argv(const bf::path &mountdir, const vector<string> 
     argv.push_back(_create_c_string(option));
   }
   _add_fuse_option_if_not_exists(&argv, "subtype", _fstype);
-  _add_fuse_option_if_not_exists(&argv, "fsname", _fsname.get_value_or(_fstype));
+  auto fsname = _fsname.get_value_or(_fstype);
+  boost::replace_all(fsname, ",", "\\,"); // Avoid fuse options parser bug where a comma in the fsname is misinterpreted as an options delimiter, see https://github.com/cryfs/cryfs/issues/326
+  _add_fuse_option_if_not_exists(&argv, "fsname", fsname);
 #ifdef __APPLE__
   // Make volume name default to mountdir on macOS
   _add_fuse_option_if_not_exists(&argv, "volname", mountdir.filename().string());
