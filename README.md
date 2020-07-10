@@ -49,22 +49,22 @@ Requirements
   - libcurl4 (including development headers)
   - SSL development libraries (including development headers, e.g. libssl-dev)
   - libFUSE version >= 2.8.6 (including development headers), on Mac OS X instead install osxfuse from https://osxfuse.github.io/
-  - Python >= 2.7
+  - Python >= 3.5
   - OpenMP
 
 You can use the following commands to install these requirements
 
         # Ubuntu
-        $ sudo apt install git g++ cmake make libcurl4-openssl-dev libssl-dev libfuse-dev python
-        $ sudo pip install conan
+        $ sudo apt install git g++ cmake make libcurl4-openssl-dev libssl-dev libfuse-dev python python3-pip
+        $ sudo pip3 install conan
 
         # Fedora
-        $ sudo dnf install git gcc-c++ cmake make libcurl-devel openssl-devel fuse-devel python
-        $ sudo pip install conan
+        $ sudo dnf install git gcc-c++ cmake make libcurl-devel openssl-devel fuse-devel python python3-pip
+        $ sudo pip3 install conan
 
         # Macintosh
         $ brew install cmake openssl libomp
-        $ sudo pip install conan
+        $ sudo pip3 install conan
 
 Build & Install
 ---------------
@@ -133,6 +133,27 @@ On most systems, CMake should find the libraries automatically. However, that do
     pass in these flags:
 
         cmake .. -DOpenMP_CXX_FLAGS='-Xpreprocessor -fopenmp -I/path/to/openmp/include' -DOpenMP_CXX_LIB_NAMES=omp -DOpenMP_omp_LIBRARY=/path/to/libomp.dylib
+
+
+Using local dependencies
+-------------------------------
+Starting with CryFS 0.11, Conan is used for dependency management.
+When you build CryFS, Conan downloads the exact version of each dependency library that was also used for development.
+All dependencies are linked statically, so there should be no incompatibility with locally installed libraries.
+This is the recommended way because it has the highest probability of working correctly.
+
+However, some distributions prefer software packages to be built against dependencies dynamically and against locally installed versions of libraries.
+So if you're building a package for such a distribution, you have the option of doing that, at the cost of potential incompatibilities.
+If you follow this workflow, please make sure to extensively test your build of CryFS.
+You're using a setup that wasn't tested by the CryFS developers.
+
+To use local dependencies, you need to tell the CryFS build how to get these dependencies.
+You can do this by writing a small CMake configuration file and passing it to the CryFS build using `-DDEPENDENCY_CONFIG=filename`.
+This configuration file needs to define a cmake target for each of the dependencies.
+
+Here's an [example config file](cmake-utils/DependenciesFromConan.cmake) that gets the dependencies from conan.
+And here's another [example config file](cmake-utils/DependenciesFromLocalSystem.cmake) that works for getting dependencies that are locally installed in Ubuntu.
+You can create your own configuration file to tell the build how to get its dependencies and, for example, mix and match. Get some dependencies from Conan and others from the local system.
 
 
 Creating .deb and .rpm packages
