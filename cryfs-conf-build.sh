@@ -11,7 +11,7 @@ rm -rf build
 mkdir -p build
 cd build
 
-conan install .. --build=missing 2>&1 | tee conan-out.txt
+#conan install .. --build=missing 2>&1 | tee conan-out.txt
 
 # CMake flags needed for a normal build on MacOS
 CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=off "
