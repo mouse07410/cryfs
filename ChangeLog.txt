@@ -7,8 +7,15 @@ Build changes:
 Other changes:
 * Now requires CMake 3.6 or later
 
+Improvements:
+* Display the file system configuration when mounting a file system
+* Now shows a better error message when failing to load the config file and distinguishes between "wrong password" and "config file not found".
+
 New features:
-* Add support for atime mount options (noatime, strictatime, relatime, atime, nodiratime). As before, relatime is the default.
+* Add support for atime mount options (noatime, strictatime, relatime, atime, nodiratime).
+* The new default is now *noatime* (in 0.10.x is was relatime).
+  Noatime reduces the amount of write necessary and with that reduces the probability for synchronization conflicts
+  or corrupted file systems if a power outage happens while writing.
 * Add an --immediate flag to cryfs-unmount that tries to unmount immediately and doesn't wait for processes to release their locks on the file system.
 
 
@@ -18,6 +25,7 @@ Fixed bugs:
 * A comma in the base directory name would make the file system fail to mount, https://github.com/cryfs/cryfs/issues/326
 * Fixed determining the user's homedir: If $HOME and the /etc/passwd entry for the current user contradict each other, now $HOME takes preference over /etc/passwd.
 * Fix Android compilation, https://github.com/cryfs/cryfs/issues/345
+* Remove cryfs-stats tool which isn't ready yet and could destroy the file system
 
 
 Version 0.10.2
