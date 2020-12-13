@@ -32,7 +32,10 @@ OSXFUSE_INCLUDE="-I/usr/local/include"
 #CMAKEFLAGS="${CMAKEFLAGS} -DDISABLE_OPENMP=ON"
 #
 # Build on MacOS, enforcing Macports-installed Clang
-#CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_C_COMPILER=clang-mp-6.0 -DCMAKE_CXX_COMPILER=clang++-mp-6.0"
+#CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_C_COMPILER=clang-mp-11 -DCMAKE_CXX_COMPILER=clang++-mp-11"
+#
+# Silence compiler warning for adding Boost libraries the way I did below
+CMAKEFLAGS="${CMAKEFLAGS} -Wno-unused-command-line-argument"
 #
 # Using AppleClang from Xcode with Macports-installed libomp
 #OMP_CMAKE_C_FLAGS="-DOpenMP_C_FLAGS=-I/opt/local/include/libomp"
@@ -58,7 +61,7 @@ CMAKEFLAGS="${CMAKEFLAGS} -DCRYFS_UPDATE_CHECKS=off"
 # Provide verbose output - useful to debug build process
 CMAKEFLAGS="${CMAKEFLAGS} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"
 
-cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS=" -I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${BOOST_INCLUDE} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS} ${OSXFUSE_INCLUDE}" -DFUSE_LIB_PATH=/usr/local/lib 2>&1 | tee cmake-out.txt
+cmake .. ${CMAKEFLAGS} -DCMAKE_C_FLAGS=" -I/opt/local/include" -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${BOOST_INCLUDE} ${OMP_CMAKE_OMP} ${OMP_CMAKE_CXX_FLAGS} ${OSXFUSE_INCLUDE}" -DFUSE_LIB_PATH=/usr/local/lib/ 2>&1 | tee cmake-out.txt
 
 time make -j 4 V=1 2>&1 | tee make-out.txt
 #make check
